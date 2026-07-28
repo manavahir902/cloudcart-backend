@@ -1,39 +1,48 @@
-// NOTE: This uses in-memory mock data for now so you have something working
-// end-to-end tonight. In Phase 9-10, we swap this for real MySQL queries against RDS.
-// Keeping the controller function signatures the same means the routes above
-// won't need to change at all when we make that swap - that's the benefit of
-// separating routes/controllers from the data layer.
+const pool = require('../config/db');
 
-const mockProducts = [
-  { id: 1, name: 'Wireless Mouse', price: 799, stock: 42, category: 'Electronics' },
-  { id: 2, name: 'Mechanical Keyboard', price: 3499, stock: 15, category: 'Electronics' },
-  { id: 3, name: 'Water Bottle', price: 349, stock: 100, category: 'Home' },
-];
+// NOTE: This now queries real MySQL on RDS instead of the in-memory array
+// from Phase 6. The route signatures (routes/productRoutes.js) didn't need
+// to change at all - that's the payoff of separating routes/controllers/data.
 
-exports.getAllProducts = (req, res) => {
-  res.json(mockProducts);
-};
-
-exports.getProductById = (req, res) => {
-  const product = mockProducts.find(p => p.id === parseInt(req.params.id));
-  if (!product) {
-    return res.status(404).json({ error: 'Product not found' });
+exports.getAllProducts = async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM products ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch products' });
   }
-  res.json(product);
 };
 
-exports.createProduct = (req, res) => {
-  const { name, price, stock, category } = req.body;
+exports.getProductById = async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM products WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch product' });
+  }
+};
+
+exports.createProduct = async (req, res) => {
+  const { name, description, price, stock, category } = req.body;
   if (!name || !price) {
     return res.status(400).json({ error: 'name and price are required' });
   }
-  const newProduct = {
-    id: mockProducts.length + 1,
-    name,
-    price,
-    stock: stock || 0,
-    category: category || 'Uncategorized',
-  };
-  mockProducts.push(newProduct);
-  res.status(201).json(newProduct);
+  try {
+    // Using ? placeholders (parameterized queries) instead of string-concatenating
+    // the request body directly into SQL. This is the standard defense against
+    // SQL injection - never build queries with template literals from user input.
+    const [result] = await pool.query(
+      'INSERT INTO products (name, description, price, stock, category) VALUES (?, ?, ?, ?, ?)',
+      [name, description || null, price, stock || 0, category || 'Uncategorized']
+    );
+    res.status(201).json({ id: result.insertId, name, price, stock, category });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create product' });
+  }
 };
