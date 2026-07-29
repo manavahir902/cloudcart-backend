@@ -1,3 +1,14 @@
+const crypto = require('crypto');
+
+const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
+const CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET;
+
+function getSecretHash(username) {
+  return crypto
+    .createHmac('sha256', CLIENT_SECRET)
+    .update(username + CLIENT_ID)
+    .digest('base64');
+}
 const {
   SignUpCommand,
   ConfirmSignUpCommand,
@@ -22,14 +33,15 @@ exports.register = async (req, res) => {
 
   try {
     const signUpResult = await cognitoClient.send(new SignUpCommand({
-      ClientId: CLIENT_ID,
-      Username: email,
-      Password: password,
-      UserAttributes: [
-        { Name: 'name', Value: name },
-        { Name: 'email', Value: email },
-      ],
-    }));
+  ClientId: CLIENT_ID,
+  SecretHash: getSecretHash(email),
+  Username: email,
+  Password: password,
+  UserAttributes: [
+    { Name: 'name', Value: name },
+    { Name: 'email', Value: email },
+  ],
+}));
 
     // Store app-specific data locally, linked by Cognito's "sub" (unique user id)
     await pool.query(
@@ -64,10 +76,11 @@ exports.confirm = async (req, res) => {
   }
   try {
     await cognitoClient.send(new ConfirmSignUpCommand({
-      ClientId: CLIENT_ID,
-      Username: email,
-      ConfirmationCode: code,
-    }));
+  ClientId: CLIENT_ID,
+  SecretHash: getSecretHash(email),
+  Username: email,
+  ConfirmationCode: code,
+}));
     res.json({ message: 'Account confirmed. You can now log in.' });
   } catch (err) {
     console.error(err);
@@ -86,9 +99,10 @@ exports.login = async (req, res) => {
       AuthFlow: 'USER_PASSWORD_AUTH',
       ClientId: CLIENT_ID,
       AuthParameters: {
-        USERNAME: email,
-        PASSWORD: password,
-      },
+  USERNAME: email,
+  PASSWORD: password,
+  SECRET_HASH: getSecretHash(email),
+},
     }));
 
     res.json({
