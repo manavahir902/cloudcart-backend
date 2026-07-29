@@ -1,8 +1,5 @@
 const crypto = require('crypto');
 
-const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
-const CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET;
-
 function getSecretHash(username) {
   return crypto
     .createHmac('sha256', CLIENT_SECRET)
@@ -18,6 +15,8 @@ const cognitoClient = require('../config/cognito');
 const pool = require('../config/db');
 
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
+const CLIENT_SECRET = process.env.COGNITO_CLIENT_SECRET;
+
 
 // POST /api/auth/register
 // Cognito now owns password storage, hashing, and validation entirely -
