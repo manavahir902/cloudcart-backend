@@ -111,7 +111,10 @@ exports.login = async (req, res) => {
       expiresIn: authResult.AuthenticationResult.ExpiresIn,
     });
   } catch (err) {
-    console.error(err);
+    console.error("LOGIN ERROR:");
+console.error(err);
+console.error(err.message);
+console.error(JSON.stringify(err, null, 2));
     if (err.name === 'NotAuthorizedException' || err.name === 'UserNotFoundException') {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
