@@ -6,6 +6,7 @@ const morgan = require('morgan');
 
 const productRoutes = require('./routes/productRoutes');
 const authRoutes = require('./routes/authRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.get('/health', (req, res) => {
 // ---- API routes ----
 app.use('/api/products', productRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/uploads', uploadRoutes);
 
 // ---- 404 handler ----
 app.use((req, res) => {
