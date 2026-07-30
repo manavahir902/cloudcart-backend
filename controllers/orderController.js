@@ -1,5 +1,5 @@
 const pool = require('../config/db');
-const sendOrderConfirmationEmail = require('../utils/sendOrderEmail');
+const queueOrderConfirmationEmail = require('../utils/queueOrderEmail');
 
 // Helper: look up our internal MySQL user id from the Cognito identity
 // attached to req.user by authMiddleware. Every order-related query needs
@@ -80,8 +80,8 @@ exports.createOrder = async (req, res) => {
     // Why: the order is already successfully placed and paid-for (in real
     // flow) by this point - a flaky email shouldn't make the customer think
     // their order failed when it didn't. We log the error instead.
-    sendOrderConfirmationEmail(req.user.email, { id: orderId, total, items: itemDetails })
-      .catch(err => console.error('Order confirmation email failed:', err));
+    queueOrderConfirmationEmail(req.user.email, { id: orderId, total, items: itemDetails })
+      .catch(err => console.error('Failed to queue order email:', err));
 
     res.status(201).json({ orderId, total, status: 'pending' });
   } catch (err) {
