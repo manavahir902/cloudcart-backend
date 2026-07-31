@@ -1,20 +1,52 @@
 const mysql = require('mysql2/promise');
+const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
 
-// Why a POOL instead of a single connection:
-// A single connection can only handle one query at a time - if two requests
-// hit the API simultaneously, one has to wait. A pool keeps multiple ready
-// connections open and hands them out as needed, which is essential once
-// you have real concurrent traffic (and you WILL, once the ASG is serving
-// requests across 2+ instances, each handling multiple users at once).
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,   // max simultaneous connections per instance - safe default for t2/t3.micro
-  queueLimit: 0,
-});
+const secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION || 'ap-south-1' });
 
-module.exports = pool;
+let poolPromise = null;
+
+// Fetches DB credentials from Secrets Manager (instead of .env) and builds
+// the real mysql2 pool exactly ONCE - cached in poolPromise so we don't hit
+// Secrets Manager or open a fresh pool on every single query.
+async function initPool() {
+  const secretResult = await secretsClient.send(
+    new GetSecretValueCommand({ SecretId: process.env.DB_SECRET_ARN })
+  );
+  const creds = JSON.parse(secretResult.SecretString);
+
+  // host/port/database name are NOT secrets (they're not useful to an
+  // attacker without the password too) - only username/password move to
+  // Secrets Manager. host/port/database stay in .env as before.
+  return mysql.createPool({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 3306,
+    user: creds.username,
+    password: creds.password,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+  });
+}
+
+function getPool() {
+  if (!poolPromise) {
+    poolPromise = initPool();
+  }
+  return poolPromise;
+}
+
+// Wrapper exposing the SAME method signatures every controller already
+// calls (pool.query(...), pool.getConnection()) - so productController.js
+// and orderController.js need ZERO changes, even though credential fetching
+// underneath is now async and comes from Secrets Manager, not .env.
+module.exports = {
+  query: async (...args) => {
+    const pool = await getPool();
+    return pool.query(...args);
+  },
+  getConnection: async () => {
+    const pool = await getPool();
+    return pool.getConnection();
+  },
+};
