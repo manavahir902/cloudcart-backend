@@ -1,34 +1,21 @@
-# Environment variables referenced below (AWS_ACCOUNT_ID, IMAGE_REPO_NAME,
-# AWS_DEFAULT_REGION) are set as CodeBuild project environment variables in
-# Step 25.3 - not hardcoded here so this file has no account-specific info.
+version: 0.2
 
 phases:
   pre_build:
     commands:
-      - echo Logging in to Amazon ECR...
+      - echo Logging in to Amazon ECR
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
-      # Using the CodeBuild-provided CODEBUILD_RESOLVED_SOURCE_VERSION (the
-      # git commit hash) as the image tag instead of a fixed "v1" we type
-      # manually - this is what actually gives every deploy a unique,
-      # traceable version, replacing the manual v1/v2/v3 scheme from Phase 23.
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-8)
-      - echo Image tag will be $IMAGE_TAG
-
+      - echo Image tag is $IMAGE_TAG
   build:
     commands:
-      - echo Build started on `date`
-      - echo Building the Docker image...
+      - echo Build started
       - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
       - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
-
   post_build:
     commands:
-      - echo Build completed, pushing to ECR...
+      - echo Build finished, pushing image
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
-      - echo Writing image definitions file for ECS deployment...
-      # imagedefinitions.json is a specific file format the ECS deploy
-      # action (Step 25.5) reads to know which container in the task
-      # definition to update, and with which new image.
       - printf '[{"name":"cloudcart-backend","imageUri":"%s"}]' $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG > imagedefinitions.json
 
 artifacts:
