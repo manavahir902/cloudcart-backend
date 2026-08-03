@@ -44,7 +44,6 @@ A production-pattern e-commerce backend built end-to-end on AWS: custom networki
 ---
 
 <img width="1106" height="346" alt="Screenshot 2026-08-03 054613" src="https://github.com/user-attachments/assets/0a01db24-f637-4bd8-975d-c8b3d8cfc0a8" />
-<img width="1920" height="1080" alt="Screenshot (1821)" src="https://github.com/user-attachments/assets/8d5bfdd4-475b-4d75-9e26-628085823084" />
 <img width="1916" height="813" alt="Screenshot 2026-08-03 054057" src="https://github.com/user-attachments/assets/9aa5e3e8-d164-41c7-b9fa-27136d4f94db" />
 <img width="1840" height="472" alt="Screenshot (1822)" src="https://github.com/user-attachments/assets/8003bbc8-3abc-4ea8-ab71-0ba2e85a947d" />
 <img width="1855" height="311" alt="Screenshot (1823)" src="https://github.com/user-attachments/assets/07fea207-d04f-4f0f-a74d-cb800315096a" />
