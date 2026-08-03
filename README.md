@@ -5,34 +5,9 @@ A production-pattern e-commerce backend built end-to-end on AWS: custom networki
 ---
 
 ## Architecture
+<img width="2211" height="2215" alt="cloudcart_architecture" src="https://github.com/user-attachments/assets/b16aea35-f41e-4dc3-96cf-57694e37f498" />
 
-```
-                              Internet
-                                 │
-                          Route 53 (DNS)
-                                 │
-                    ACM Certificate (HTTPS)
-                                 │
-                 ┌───────────────────────────┐
-                 │   Application Load Balancer │
-                 │   (public subnets, 2 AZs)   │
-                 └───────────────┬─────────────┘
-                                 │
-                            AWS WAF
-                    (SQLi / XSS / bad-bot rules)
-                                 │
-                 ┌───────────────────────────┐
-                 │      ECS Fargate Service    │
-                 │   (private subnets, 2 AZs)  │
-                 │   2-4 tasks, auto-scaling   │
-                 └───────────────┬─────────────┘
-                                 │
-        ┌────────────┬──────────┼──────────┬────────────┐
-        │             │          │          │            │
-   RDS MySQL    Cognito    S3 (images)   SQS Queue   Secrets Manager
-  (private, encrypted)  (managed auth)  (private,      → Lambda      (DB password,
-                                          CloudFront)   → SES email    fetched at runtime)
-```
+
 
 **Networking:** Custom VPC (`10.0.0.0/16`), 6 subnets across 2 Availability Zones (public / private-app / private-db), NAT Gateway for outbound-only private access, 3-tier security groups (ALB → App → DB, each trusting only the tier before it).
 
@@ -64,66 +39,18 @@ A production-pattern e-commerce backend built end-to-end on AWS: custom networki
 - **Containerization:** Docker, Amazon ECR, ECS Fargate
 - **IaC:** Terraform
 - **CI/CD:** AWS CodePipeline, CodeBuild
-- **AWS services used:** VPC, EC2 (historical), ALB, ECS/Fargate, RDS, S3, CloudFront, Cognito, SES, SQS, Lambda, Secrets Manager, KMS, CloudWatch, CloudTrail, WAF, Route 53, ACM, IAM, ECR, CodePipeline, CodeBuild, Budgets
+- **AWS services used:** VPC, EC2 (historical), ALB, ECS/Fargate, RDS, S3, CloudFront, Cognito, SES, SQS, Lambda, Secrets Manager, KMS, CloudWatch, CloudTrail, WAF, Route 53, ACM, IAM, ECR, CodePipeline, CodeBuild, Budgets.
 
 ---
 
-## Deliberate Design Decisions (and why)
+<img width="1106" height="346" alt="Screenshot 2026-08-03 054613" src="https://github.com/user-attachments/assets/0a01db24-f637-4bd8-975d-c8b3d8cfc0a8" />
+<img width="1916" height="813" alt="Screenshot 2026-08-03 054057" src="https://github.com/user-attachments/assets/9aa5e3e8-d164-41c7-b9fa-27136d4f94db" />
+<img width="1840" height="472" alt="Screenshot (1822)" src="https://github.com/user-attachments/assets/8003bbc8-3abc-4ea8-ab71-0ba2e85a947d" />
+<img width="1855" height="311" alt="Screenshot (1823)" src="https://github.com/user-attachments/assets/07fea207-d04f-4f0f-a74d-cb800315096a" />
+<img width="1649" height="596" alt="Screenshot (1824)" src="https://github.com/user-attachments/assets/1d19842e-27b8-441d-bb07-73124872136e" />
+<img width="1626" height="636" alt="Screenshot (1825)" src="https://github.com/user-attachments/assets/3b40db7e-8dab-4bb5-8ebf-4b727d6731a0" />
+<img width="1169" height="608" alt="Screenshot 2026-08-03 054403" src="https://github.com/user-attachments/assets/92e6d0c9-ccc3-4b1f-847d-5a3170bccf88" />
+<img width="1165" height="576" alt="Screenshot 2026-08-03 054418" src="https://github.com/user-attachments/assets/64253b6b-168a-4e8e-b68c-9a77c5d87f3b" />
+<img width="1171" height="570" alt="Screenshot 2026-08-03 054439" src="https://github.com/user-attachments/assets/4e7c2301-3320-4f97-a224-52449e53f951" />
 
-| Decision | Reasoning |
-|---|---|
-| Pre-signed S3 URLs instead of routing uploads through the API | Backend never handles image bytes — less load, less bandwidth, smaller attack surface |
-| SQS + Lambda for order emails, not a direct SES call in the request | A slow/failed email can never block or fail order placement |
-| `SELECT ... FOR UPDATE` on stock checks | Prevents two simultaneous orders from both succeeding on the last unit of stock |
-| Cognito over hand-rolled JWT auth | Password resets, email verification, and secure token issuance are hard to get right — don't reinvent them |
-| Secrets Manager for the DB password, not `.env` | Credentials never sit in plaintext in a launch template, container image, or git history |
-| IAM policies scoped to specific resource ARNs, not `*` | Contains the blast radius if any one component is ever compromised |
-| Private subnets for app + database tiers | Only the ALB is internet-facing; nothing else has a direct path in |
 
----
-
-## Known, Deliberately Deferred Items
-
-Being transparent about tradeoffs is itself a signal of engineering maturity — these were conscious "not tonight" calls, not oversights:
-
-- **RDS Multi-AZ** — currently single-AZ; Multi-AZ failover was scoped for Phase 29 and deferred (cost tradeoff for a learning project)
-- **`COGNITO_CLIENT_SECRET`** — currently a plain ECS task-definition environment variable; should move to Secrets Manager alongside the DB password
-- **ECS Task Role vs Execution Role** — currently share one IAM role for simplicity; a stricter setup separates "what ECS needs to start the container" from "what the app needs at runtime"
-- **Unused dependencies** — `bcryptjs` and `jsonwebtoken` remain in `package.json` from before the Cognito migration (Phase 12); no longer imported anywhere, safe to remove
-- **Terraform coverage** — currently covers VPC/RDS/ALB only; ECS task definitions, Cognito, S3, and CloudFront are not yet expressed as code
-- **Single NAT Gateway** — one NAT Gateway in one AZ (matches manual build); a fully HA setup would use one per AZ
-
----
-
-## What Actually Happened Under Load/Failure Testing
-
-- Manually terminated a running ECS task mid-traffic: **zero downtime observed** — the ALB routed exclusively to the remaining healthy task while ECS launched a replacement (~1-2 min recovery)
-- Confirmed running tasks are distributed across both Availability Zones, not concentrated in one
-- Load-tested the API to observe auto-scaling behavior under the CPU-based target-tracking policy
-
----
-
-## Resume Bullet Points
-
-- Architected and deployed a production-pattern e-commerce backend on AWS, spanning custom VPC networking, containerized compute (ECS Fargate), managed auth (Cognito), and CI/CD (CodePipeline/CodeBuild)
-- Migrated a live application from EC2/Auto Scaling to Docker containers on ECS Fargate with zero downtime, using a blue/green-style ALB listener-rule cutover
-- Implemented least-privilege IAM across 10+ distinct service integrations, scoping every policy to specific resource ARNs rather than wildcard permissions
-- Built an async order-processing pipeline (SQS → Lambda → SES) to decouple email delivery from the critical request path
-- Secured credentials via AWS Secrets Manager, eliminating plaintext database passwords from source control and infrastructure config
-- Established observability via CloudWatch dashboards and SNS-integrated alarms across compute, database, and load-balancer metrics
-- Authored Terraform modules for core infrastructure (VPC, RDS, ALB), validated via full apply/destroy cycles
-- Load- and failure-tested the deployed system, confirming zero-downtime task recovery and correct multi-AZ task distribution
-
----
-
-## Interview Talking Points
-
-**"Walk me through the architecture"** → Use the diagram above; narrate request flow: Route 53 → ACM/HTTPS → WAF → ALB → Fargate → RDS/Cognito/S3/SQS.
-
-**"How would you improve this further?"** → Point directly to the "Known, Deliberately Deferred Items" section above — a real, considered list beats a vague "add more monitoring."
-
-**"How do you handle secrets?"** → Secrets Manager for DB credentials, fetched at runtime via IAM role, never in code or environment files baked into an image.
-
-**"How does this scale?"** → ECS Fargate target-tracking auto-scaling on CPU (2-4 tasks), ALB distributing across 2 AZs, RDS connection pooling in the app layer.
-
-**"What would you do differently starting over?"** → Honest answer: define ECS/Cognito/S3 in Terraform from the start rather than console-first, then codify — retrofitting IaC after manual builds is more work than starting with it.
