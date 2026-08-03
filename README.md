@@ -5,34 +5,9 @@ A production-pattern e-commerce backend built end-to-end on AWS: custom networki
 ---
 
 ## Architecture
+<img width="2211" height="2215" alt="cloudcart_architecture" src="https://github.com/user-attachments/assets/b16aea35-f41e-4dc3-96cf-57694e37f498" />
 
-```
-                              Internet
-                                 │
-                          Route 53 (DNS)
-                                 │
-                    ACM Certificate (HTTPS)
-                                 │
-                 ┌───────────────────────────┐
-                 │   Application Load Balancer │
-                 │   (public subnets, 2 AZs)   │
-                 └───────────────┬─────────────┘
-                                 │
-                            AWS WAF
-                    (SQLi / XSS / bad-bot rules)
-                                 │
-                 ┌───────────────────────────┐
-                 │      ECS Fargate Service    │
-                 │   (private subnets, 2 AZs)  │
-                 │   2-4 tasks, auto-scaling   │
-                 └───────────────┬─────────────┘
-                                 │
-        ┌────────────┬──────────┼──────────┬────────────┐
-        │             │          │          │            │
-   RDS MySQL    Cognito    S3 (images)   SQS Queue   Secrets Manager
-  (private, encrypted)  (managed auth)  (private,      → Lambda      (DB password,
-                                          CloudFront)   → SES email    fetched at runtime)
-```
+
 
 **Networking:** Custom VPC (`10.0.0.0/16`), 6 subnets across 2 Availability Zones (public / private-app / private-db), NAT Gateway for outbound-only private access, 3-tier security groups (ALB → App → DB, each trusting only the tier before it).
 
