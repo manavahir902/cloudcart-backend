@@ -66,6 +66,3 @@ A production-pattern e-commerce backend built end-to-end on AWS: custom networki
 - **CI/CD:** AWS CodePipeline, CodeBuild
 - **AWS services used:** VPC, EC2 (historical), ALB, ECS/Fargate, RDS, S3, CloudFront, Cognito, SES, SQS, Lambda, Secrets Manager, KMS, CloudWatch, CloudTrail, WAF, Route 53, ACM, IAM, ECR, CodePipeline, CodeBuild, Budgets
 
----
-
-r?"** → Honest answer: define ECS/Cognito/S3 in Terraform from the start rather than console-first, then codify — retrofitting IaC after manual builds is more work than starting with it.
